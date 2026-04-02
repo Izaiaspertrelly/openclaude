@@ -57,7 +57,7 @@ export OPENAI_MODEL=codexplan
 # optional if you do not already have ~/.codex/auth.json
 export CODEX_API_KEY=...
 
-openclaude
+pertrellyclaude
 ```
 
 ### DeepSeek
