@@ -152,6 +152,128 @@ function boxRow(content: string, width: number, rawLen: number): string {
   return `${rgb(...BORDER)}│${RESET}${content}${' '.repeat(pad)}${rgb(...BORDER)}│${RESET}`
 }
 
+// ─── Baby mascot animation ────────────────────────────────────────────────────
+
+// Claudinho baby mascot frames. 5 lines tall, 11 columns wide.
+// The baby crawls left → center, looks at the screen, waves, then crawls
+// out to the right.
+const BABY_HEIGHT = 5
+
+// Crawl cycle: alternate between A and B for the walk animation.
+const BABY_CRAWL_A = [
+  '   ╭─────╮ ',
+  '   │ ◕ᴗ◕│ ',
+  '   ╰──┬──╯ ',
+  '  ╱─╮ │ ╭─╲',
+  '  ╰─╯ ╰ ╰─╯',
+]
+const BABY_CRAWL_B = [
+  '   ╭─────╮ ',
+  '   │ ◕ᴗ◕│ ',
+  '   ╰──┬──╯ ',
+  '  ╱─╮ │╭──╲',
+  '   ╰─╯╯╰──╯',
+]
+
+// Baby looks at the screen and waves with one hand up.
+const BABY_WAVE_UP = [
+  '  ╭─────╮ ♡',
+  '  │ ^ᴗ^ │╱ ',
+  '  ╰──┬──╯  ',
+  '  ╱──┴──╲  ',
+  '  ╰──┴──╯  ',
+]
+const BABY_WAVE_DOWN = [
+  '  ╭─────╮  ',
+  '  │ ^ᴗ^ │♡ ',
+  '  ╰──┬──╲╲ ',
+  '  ╱──┴──╲  ',
+  '  ╰──┴──╯  ',
+]
+
+// Colors for the baby (pink skin tone + blush cheeks)
+const BABY_SKIN: RGB = [255, 200, 180]
+const BABY_OUTLINE: RGB = [220, 120, 130]
+const BABY_BLUSH: RGB = [255, 140, 160]
+
+function paintBabyLine(line: string): string {
+  // Special characters get the blush/accent color, rest is skin tone.
+  let out = ''
+  for (const ch of line) {
+    if ('♡◕^'.includes(ch)) {
+      out += rgb(...BABY_BLUSH) + ch
+    } else if ('╭╮╯╰─│┬┴╲╱'.includes(ch)) {
+      out += rgb(...BABY_OUTLINE) + ch
+    } else if ('ᴗ'.includes(ch)) {
+      out += rgb(...BABY_BLUSH) + ch
+    } else {
+      out += rgb(...BABY_SKIN) + ch
+    }
+  }
+  return out + RESET
+}
+
+function drawBaby(
+  w: (s: string) => void,
+  frame: string[],
+  offset: number,
+  redrawFromAbove: boolean,
+): void {
+  if (redrawFromAbove) {
+    // Move cursor up BABY_HEIGHT lines before redrawing
+    w(`${ESC}${BABY_HEIGHT}A`)
+  }
+  for (const line of frame) {
+    w(`${ESC}2K\r${' '.repeat(offset)}${paintBabyLine(line)}\n`)
+  }
+}
+
+function animateBaby(w: (s: string) => void, termWidth: number): void {
+  // Reserve BABY_HEIGHT lines of vertical space below the logo
+  for (let i = 0; i < BABY_HEIGHT; i++) w('\n')
+
+  const babyWidth = 11
+  const centerX = Math.max(0, Math.floor((termWidth - babyWidth) / 2))
+  const startX = 2
+
+  // ── Phase 1: crawl in from the left to the center ──
+  let step = 0
+  for (let x = startX; x <= centerX; x += 2) {
+    const frame = step % 2 === 0 ? BABY_CRAWL_A : BABY_CRAWL_B
+    drawBaby(w, frame, x, true)
+    sleepSync(90)
+    step++
+  }
+
+  // ── Phase 2: pause, look at the screen, wave 3 times ──
+  for (let i = 0; i < 3; i++) {
+    drawBaby(w, BABY_WAVE_UP, centerX, true)
+    sleepSync(220)
+    drawBaby(w, BABY_WAVE_DOWN, centerX, true)
+    sleepSync(220)
+  }
+  // Settle on the waving-up frame briefly
+  drawBaby(w, BABY_WAVE_UP, centerX, true)
+  sleepSync(350)
+
+  // ── Phase 3: crawl off to the right ──
+  step = 0
+  for (let x = centerX; x <= termWidth - 2; x += 2) {
+    const frame = step % 2 === 0 ? BABY_CRAWL_A : BABY_CRAWL_B
+    drawBaby(w, frame, x, true)
+    sleepSync(70)
+    step++
+  }
+
+  // Clear the baby lines so the rest of the startup screen renders cleanly
+  w(`${ESC}${BABY_HEIGHT}A`)
+  for (let i = 0; i < BABY_HEIGHT; i++) {
+    w(`${ESC}2K\n`)
+  }
+  // Move cursor back up one blank-line so Phase 2 (tagline) keeps tight layout
+  w(`${ESC}${BABY_HEIGHT}A`)
+}
+
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
 export function printStartupScreen(): void {
@@ -199,6 +321,9 @@ export function printStartupScreen(): void {
 
   sleepSync(60)
   w('\n')
+
+  // ── Phase 1.5: Claudinho baby mascot crawl & wave animation ──
+  animateBaby(w, W)
 
   // ── Phase 2: Tagline typed out character by character ──
   const tagText = 'Any model. Every tool. Zero limits.'
