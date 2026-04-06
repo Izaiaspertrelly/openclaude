@@ -8,7 +8,8 @@
  * - src/ path aliases
  */
 
-import { readFileSync } from 'fs'
+import { existsSync, readFileSync } from 'fs'
+import { dirname, resolve as pathResolve } from 'path'
 import { noTelemetryPlugin } from './no-telemetry-plugin'
 
 const pkg = JSON.parse(readFileSync('./package.json', 'utf-8'))
@@ -133,6 +134,240 @@ export async function handleBgFlag() { throw new Error("Background sessions are 
               'export {}',
             loader: 'js',
           }),
+        )
+
+        // Claudinho: Stub all internal Anthropic feature-gated modules that
+        // were stripped from the open-source fork. These are all behind
+        // feature() flags that always return false, so they're dead code —
+        // but Bun still tries to resolve them at bundle time.
+        const MISSING_INTERNAL_MODULES = [
+          // proactive
+          'proactive/index',
+          // assistant / kairos
+          'assistant/index',
+          'assistant/gate',
+          'assistant/sessionDiscovery',
+          // server / remote control
+          'server/parseConnectUrl',
+          'server/server',
+          'server/sessionManager',
+          'server/backends/dangerousBackend',
+          'server/serverBanner',
+          'server/serverLog',
+          'server/lockfile',
+          'server/connectHeadless',
+          // ssh
+          'ssh/createSSHSession',
+          // skillSearch
+          'services/skillSearch/featureCheck',
+          'services/skillSearch/prefetch',
+          'services/skillSearch/localSearch',
+          // compact internals
+          'services/compact/cachedMCConfig',
+          'services/compact/snipProjection',
+          'services/compact/reactiveCompact',
+          // sessionTranscript
+          'services/sessionTranscript/sessionTranscript',
+          // jobs
+          'jobs/classifier',
+          // utils
+          'utils/taskSummary',
+          'utils/attributionHooks',
+          'utils/systemThemeWatcher',
+          // attribution trailer (feature-gated)
+          'attributionTrailer',
+          // coordinator
+          'coordinator/workerAgent',
+          // skills
+          'skills/mcpSkills',
+          // tools (feature-gated)
+          'tools/SleepTool/SleepTool',
+          'tools/MonitorTool/MonitorTool',
+          'tools/SendUserFileTool/SendUserFileTool',
+          'tools/SendUserFileTool/prompt',
+          'tools/PushNotificationTool/PushNotificationTool',
+          'tools/SubscribePRTool/SubscribePRTool',
+          'tools/OverflowTestTool/OverflowTestTool',
+          'tools/CtxInspectTool/CtxInspectTool',
+          'tools/TerminalCaptureTool/TerminalCaptureTool',
+          'tools/TerminalCaptureTool/prompt',
+          'tools/WebBrowserTool/WebBrowserTool',
+          'tools/SnipTool/SnipTool',
+          'tools/SnipTool/prompt',
+          'tools/ListPeersTool/ListPeersTool',
+          'tools/WorkflowTool/createWorkflowCommand',
+          'tools/WorkflowTool/bundled/index',
+          'tools/WorkflowTool/WorkflowTool',
+          'tools/DiscoverSkillsTool/prompt',
+          'tools/VerifyPlanExecutionTool/constants',
+          // commands (feature-gated)
+          'commands/proactive',
+          'commands/assistant/index',
+          'commands/remoteControlServer/index',
+          'commands/force-snip',
+          'commands/workflows/index',
+          'commands/subscribe-pr',
+          'commands/torch',
+          'commands/peers/index',
+          'commands/fork/index',
+          'commands/buddy/index',
+          // computer-use
+          'computerUse/mcpServer',
+          // tasks (feature-gated)
+          'tasks/MonitorMcpTask/MonitorMcpTask',
+          'tasks/LocalWorkflowTask/LocalWorkflowTask',
+          // components (feature-gated)
+          'components/tasks/MonitorMcpDetailDialog',
+          'components/messages/SnipBoundaryMessage',
+          'messages/SnipBoundaryMessage',
+          'MonitorMcpDetailDialog',
+          // session transcript
+          'sessionTranscript/sessionTranscript',
+          // workflows
+          'components/tasks/WorkflowDetailDialog',
+          'WorkflowDetailDialog',
+          // memdir
+          'memdir/memoryShapeTelemetry',
+          // messages
+          'components/messages/UserGitHubWebhookMessage',
+          'components/messages/UserForkBoilerplateMessage',
+          'components/messages/UserCrossSessionMessage',
+          'messages/UserGitHubWebhookMessage',
+          'messages/UserForkBoilerplateMessage',
+          'messages/UserCrossSessionMessage',
+          'UserGitHubWebhookMessage',
+          'UserForkBoilerplateMessage',
+          'UserCrossSessionMessage',
+        ]
+
+        // Build a regex that matches any relative import ending in one of
+        // these paths (with optional .js extension).
+        const missingModulesRegex = new RegExp(
+          '(^|/)(' +
+            MISSING_INTERNAL_MODULES.map(m =>
+              m.replace(/\//g, '\\/'),
+            ).join('|') +
+            ')\\.js$',
+        )
+
+        // Extract the named imports for a given (importer, path) pair by
+        // parsing the importer source.
+        const extractImportedNames = (
+          importerPath: string,
+          importPath: string,
+        ): Set<string> => {
+          const names = new Set<string>()
+          try {
+            const src = readFileSync(importerPath, 'utf-8')
+            const escaped = importPath.replace(
+              /[.*+?^${}()|[\]\\]/g,
+              '\\$&',
+            )
+            const re = new RegExp(
+              `import\\s*(?:type\\s*)?\\{([^}]+)\\}\\s*from\\s*['"]${escaped}['"]`,
+              'g',
+            )
+            let m: RegExpExecArray | null
+            while ((m = re.exec(src)) !== null) {
+              for (const part of m[1].split(',')) {
+                const name = part
+                  .trim()
+                  .replace(/^type\s+/, '')
+                  .split(/\s+as\s+/)[0]
+                  .trim()
+                if (name && /^[A-Za-z_$][\w$]*$/.test(name)) {
+                  names.add(name)
+                }
+              }
+            }
+          } catch {
+            // ignore
+          }
+          return names
+        }
+
+        // Unique-path encoding: stub path = `${importPath}::${importerHash}`
+        // so each (importer, path) pair becomes its own onLoad invocation with
+        // the right named exports. This avoids races when multiple importers
+        // stub the same module with different names.
+        const stubInfo = new Map<
+          string,
+          { origPath: string; names: Set<string> }
+        >()
+        let stubCounter = 0
+
+        const makeStub = (args: {
+          path: string
+          importer: string
+        }) => {
+          const names = args.importer
+            ? extractImportedNames(args.importer, args.path)
+            : new Set<string>()
+          const id = `stub${stubCounter++}`
+          stubInfo.set(id, { origPath: args.path, names })
+          return {
+            path: id,
+            namespace: 'claudinho-missing-stub',
+          }
+        }
+
+        build.onResolve({ filter: missingModulesRegex }, makeStub)
+
+        // Claudinho catch-all: any relative import from within src/ whose
+        // target file does not exist on disk gets stubbed.
+        build.onResolve({ filter: /^\.\.?\// }, args => {
+          if (!args.importer) return null
+          if (!args.importer.includes('/claudinho/src/')) return null
+          const importerDir = dirname(args.importer)
+          const targetPath = pathResolve(importerDir, args.path)
+          const candidates = [
+            targetPath,
+            targetPath.replace(/\.jsx?$/, '.ts'),
+            targetPath.replace(/\.jsx?$/, '.tsx'),
+            targetPath.replace(/\.jsx?$/, '.js'),
+            targetPath.replace(/\.jsx?$/, '/index.ts'),
+            targetPath.replace(/\.jsx?$/, '/index.tsx'),
+            targetPath.replace(/\.jsx?$/, '/index.js'),
+          ]
+          for (const candidate of candidates) {
+            if (existsSync(candidate)) return null
+          }
+          return makeStub(args)
+        })
+
+        // Also stub the @ant/* external packages
+        build.onResolve({ filter: /^@ant\// }, makeStub)
+
+        build.onLoad(
+          { filter: /.*/, namespace: 'claudinho-missing-stub' },
+          args => {
+            const info = stubInfo.get(args.path)
+            const names = info?.names ?? new Set<string>()
+            const exportsCode = Array.from(names)
+              .map(n => `export const ${n} = stub;`)
+              .join('\n')
+            return {
+              contents: `
+// Claudinho stub: this module (${info?.origPath ?? args.path}) was stripped from the open build.
+const noop = () => null;
+const handler = {
+  get(_, prop) {
+    if (prop === '__esModule') return true;
+    if (prop === 'default') return new Proxy(noop, handler);
+    if (prop === 'then') return undefined;
+    return new Proxy(noop, handler);
+  },
+  apply() { return new Proxy(noop, handler); },
+  construct() { return new Proxy({}, handler); },
+};
+const stub = new Proxy(noop, handler);
+export default stub;
+export const __claudinhoStub = true;
+${exportsCode}
+`,
+              loader: 'js',
+            }
+          },
         )
 
         // Resolve react/compiler-runtime to the standalone package
