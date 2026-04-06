@@ -61,13 +61,21 @@ export function ApiKeySetup({ onDone }: Props): React.ReactNode {
   const [step, setStep] = useState<Step>('select-provider')
   const [provider, setProvider] = useState<Provider>('openrouter')
   const [apiKey, setApiKey] = useState('')
+  const [cursorOffset, setCursorOffset] = useState(0)
   const [error, setError] = useState('')
   const { columns } = useTerminalSize()
 
   function handleProviderSelect(value: string) {
     setProvider(value as Provider)
+    setApiKey('')
+    setCursorOffset(0)
     setStep('enter-key')
     setError('')
+  }
+
+  function handleKeyChange(value: string) {
+    setApiKey(value)
+    setCursorOffset(value.length)
   }
 
   function handleKeySubmit(value: string) {
@@ -135,10 +143,13 @@ export function ApiKeySetup({ onDone }: Props): React.ReactNode {
           <Text>{'> '}</Text>
           <TextInput
             value={apiKey}
-            onChange={setApiKey}
+            onChange={handleKeyChange}
             onSubmit={handleKeySubmit}
             columns={Math.max(20, columns - 8)}
+            focus={true}
             showCursor={true}
+            cursorOffset={cursorOffset}
+            onChangeCursorOffset={setCursorOffset}
             placeholder="cole sua chave aqui"
           />
         </Box>
