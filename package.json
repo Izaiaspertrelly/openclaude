@@ -1,7 +1,7 @@
 {
   "name": "claudinho",
-  "version": "0.1.16",
-  "description": "Claude Code opened to any LLM — OpenAI, Gemini, DeepSeek, Ollama, and 200+ models",
+  "version": "0.1.17",
+  "description": "Claudinho — an open-source AI coding CLI by the AI First team. Works with OpenRouter, OpenAI, Anthropic, Gemini, Ollama, and 200+ models.",
   "type": "module",
   "bin": {
     "claudinho": "./bin/claudinho"

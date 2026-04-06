@@ -4,11 +4,11 @@
   <img src="claudinho.png" alt="Claudinho" width="600">
 </p>
 
-Use Claude Code with **any LLM** — powered by API keys only, no OAuth required.
+Use Claudinho with **any LLM** — powered by API keys only, no OAuth required.
 
-Claudinho lets you use Claude Code with any LLM through OpenRouter, OpenAI, Anthropic, or Google Gemini API keys. Plug in GPT-4o, DeepSeek, Gemini, Llama, Mistral, Claude, or any model available through OpenRouter (200+ models).
+Claudinho lets you use Claudinho with any LLM through OpenRouter, OpenAI, Anthropic, or Google Gemini API keys. Plug in GPT-4o, DeepSeek, Gemini, Llama, Mistral, Claude, or any model available through OpenRouter (200+ models).
 
-All of Claude Code's tools work — bash, file read/write/edit, grep, glob, agents, tasks, MCP — just powered by whatever model you choose.
+All of Claudinho's tools work — bash, file read/write/edit, grep, glob, agents, tasks, MCP — just powered by whatever model you choose.
 
 ---
 
@@ -100,7 +100,7 @@ claudinho
 ## How It Works
 
 ```
-Claude Code Tool System
+Claudinho Tool System
         |
         v
   Anthropic SDK interface (duck-typed)
