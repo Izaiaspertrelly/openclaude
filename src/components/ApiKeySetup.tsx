@@ -1,5 +1,6 @@
 import React, { useState } from 'react'
 import { Box, Text } from '../ink.js'
+import { useTerminalSize } from '../hooks/useTerminalSize.js'
 import { Select } from './CustomSelect/select.js'
 import TextInput from './TextInput.js'
 import { saveGlobalConfig } from '../utils/config.js'
@@ -7,13 +8,16 @@ import { saveGlobalConfig } from '../utils/config.js'
 type Provider = 'openrouter' | 'anthropic' | 'openai' | 'gemini'
 
 const PROVIDER_OPTIONS = [
-  { label: 'OpenRouter (recommended — 200+ models)', value: 'openrouter' as Provider },
-  { label: 'Anthropic (Claude models)', value: 'anthropic' as Provider },
-  { label: 'OpenAI (GPT models)', value: 'openai' as Provider },
-  { label: 'Google Gemini', value: 'gemini' as Provider },
+  { label: 'OpenRouter (recommended — 200+ models)', value: 'openrouter' },
+  { label: 'Anthropic (Claude models)', value: 'anthropic' },
+  { label: 'OpenAI (GPT models)', value: 'openai' },
+  { label: 'Google Gemini', value: 'gemini' },
 ]
 
-const PROVIDER_ENV_MAP: Record<Provider, { keyEnv: string; baseUrlEnv?: string; baseUrl?: string; useFlag?: string }> = {
+const PROVIDER_ENV_MAP: Record<
+  Provider,
+  { keyEnv: string; baseUrlEnv?: string; baseUrl?: string; useFlag?: string }
+> = {
   openrouter: {
     keyEnv: 'OPENAI_API_KEY',
     baseUrlEnv: 'OPENAI_BASE_URL',
@@ -34,10 +38,17 @@ const PROVIDER_ENV_MAP: Record<Provider, { keyEnv: string; baseUrlEnv?: string; 
 }
 
 const PROVIDER_KEY_HINTS: Record<Provider, string> = {
-  openrouter: 'sk-or-... (from openrouter.ai/keys)',
-  anthropic: 'sk-ant-... (from console.anthropic.com)',
-  openai: 'sk-... (from platform.openai.com)',
-  gemini: 'AI... (from aistudio.google.com)',
+  openrouter: 'sk-or-...  (get one at https://openrouter.ai/keys)',
+  anthropic: 'sk-ant-...  (get one at https://console.anthropic.com)',
+  openai: 'sk-...  (get one at https://platform.openai.com)',
+  gemini: 'AI...  (get one at https://aistudio.google.com)',
+}
+
+const PROVIDER_LABELS: Record<Provider, string> = {
+  openrouter: 'OpenRouter',
+  anthropic: 'Anthropic',
+  openai: 'OpenAI',
+  gemini: 'Google Gemini',
 }
 
 type Props = {
@@ -51,20 +62,21 @@ export function ApiKeySetup({ onDone }: Props): React.ReactNode {
   const [provider, setProvider] = useState<Provider>('openrouter')
   const [apiKey, setApiKey] = useState('')
   const [error, setError] = useState('')
+  const { columns } = useTerminalSize()
 
   function handleProviderSelect(value: string) {
     setProvider(value as Provider)
     setStep('enter-key')
+    setError('')
   }
 
   function handleKeySubmit(value: string) {
     const key = value.trim()
     if (!key) {
-      setError('API key cannot be empty')
+      setError('A chave API não pode estar vazia')
       return
     }
 
-    // Save to global config
     const envConfig = PROVIDER_ENV_MAP[provider]
     const envVars: Record<string, string> = {
       [envConfig.keyEnv]: key,
@@ -76,71 +88,73 @@ export function ApiKeySetup({ onDone }: Props): React.ReactNode {
       envVars[envConfig.useFlag] = '1'
     }
 
-    // Apply to current process
+    // Apply to current process so the rest of the session picks it up
     for (const [k, v] of Object.entries(envVars)) {
       process.env[k] = v
     }
 
-    // Save to config for persistence
+    // Persist to global config so subsequent startups reload the key
     saveGlobalConfig(current => ({
-      ...current,
+      ...(current as Record<string, unknown>),
       claudinhoProvider: provider,
       claudinhoApiKey: key,
     }))
 
     setStep('success')
-    // Auto-proceed after a brief moment
-    setTimeout(onDone, 1500)
+    setTimeout(onDone, 1200)
   }
 
   if (step === 'select-provider') {
     return (
-      <Box flexDirection="column" gap={1} paddingLeft={1}>
-        <Text bold>Choose your AI provider:</Text>
+      <Box flexDirection="column" gap={1} paddingX={1}>
+        <Text bold>Bem-vindo ao Claudinho!</Text>
+        <Text>Escolha seu provedor de IA:</Text>
         <Select
           options={PROVIDER_OPTIONS}
           onChange={handleProviderSelect}
         />
         <Text dimColor>
-          All providers require an API key. OpenRouter gives access to 200+ models.
+          Use ↑/↓ para navegar e Enter para selecionar.
         </Text>
       </Box>
     )
   }
 
   if (step === 'enter-key') {
-    const hint = PROVIDER_KEY_HINTS[provider]
     return (
-      <Box flexDirection="column" gap={1} paddingLeft={1}>
+      <Box flexDirection="column" gap={1} paddingX={1}>
         <Text bold>
-          Enter your {PROVIDER_OPTIONS.find(p => p.value === provider)?.label.split(' (')[0]} API key:
+          Insira sua chave API do {PROVIDER_LABELS[provider]}:
         </Text>
-        <Text dimColor>Format: {hint}</Text>
-        <Box>
-          <Text>API Key: </Text>
+        <Text dimColor>Formato: {PROVIDER_KEY_HINTS[provider]}</Text>
+        <Box
+          borderStyle="round"
+          borderColor="cyan"
+          paddingX={1}
+        >
+          <Text>{'> '}</Text>
           <TextInput
             value={apiKey}
             onChange={setApiKey}
             onSubmit={handleKeySubmit}
-            mask="*"
+            columns={Math.max(20, columns - 8)}
+            showCursor={true}
+            placeholder="cole sua chave aqui"
           />
         </Box>
         {error ? <Text color="red">{error}</Text> : null}
-        <Text dimColor>Press Enter to confirm</Text>
+        <Text dimColor>Pressione Enter para confirmar.</Text>
       </Box>
     )
   }
 
-  // success
   return (
-    <Box flexDirection="column" gap={1} paddingLeft={1}>
+    <Box flexDirection="column" gap={1} paddingX={1}>
       <Text color="green" bold>
-        API key saved successfully!
+        ✓ Chave API salva com sucesso!
       </Text>
-      <Text>
-        Provider: {PROVIDER_OPTIONS.find(p => p.value === provider)?.label.split(' (')[0]}
-      </Text>
-      <Text dimColor>Starting Claudinho...</Text>
+      <Text>Provedor: {PROVIDER_LABELS[provider]}</Text>
+      <Text dimColor>Iniciando Claudinho...</Text>
     </Box>
   )
 }

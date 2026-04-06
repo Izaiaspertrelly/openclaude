@@ -112,9 +112,11 @@ export async function showSetupScreens(root: Root, permissionMode: PermissionMod
   const config = getGlobalConfig();
   let onboardingShown = false;
 
-  // Skip onboarding dialog for third-party providers (no Anthropic account needed)
-  if (usesAnthropicSetup && (!config.theme || !config.hasCompletedOnboarding) // always show onboarding at least once
-  ) {
+  // Claudinho: Always show onboarding (API key setup) on first run,
+  // regardless of provider flow. Users need to enter their API key.
+  const configAny = config as Record<string, unknown>;
+  const hasApiKey = !!(configAny.claudinhoApiKey || process.env.ANTHROPIC_API_KEY || process.env.OPENAI_API_KEY || process.env.GEMINI_API_KEY);
+  if (!config.theme || !config.hasCompletedOnboarding || !hasApiKey) {
     onboardingShown = true;
     const {
       Onboarding
