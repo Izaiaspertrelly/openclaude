@@ -112,11 +112,31 @@ export async function showSetupScreens(root: Root, permissionMode: PermissionMod
   const config = getGlobalConfig();
   let onboardingShown = false;
 
-  // Claudinho: Always show onboarding (API key setup) on first run,
-  // regardless of provider flow. Users need to enter their API key.
+  // Claudinho: Always show onboarding until the user has explicitly
+  // configured a provider through the ApiKeySetup screen. We only trust
+  // `claudinhoApiKey` in the global config — inherited env vars like
+  // ANTHROPIC_API_KEY / OPENAI_API_KEY from the shell do NOT count, because
+  // the user expects to choose their provider on first run.
   const configAny = config as Record<string, unknown>;
-  const hasApiKey = !!(configAny.claudinhoApiKey || process.env.ANTHROPIC_API_KEY || process.env.OPENAI_API_KEY || process.env.GEMINI_API_KEY);
-  if (!config.theme || !config.hasCompletedOnboarding || !hasApiKey) {
+  const hasClaudinhoKey = !!configAny.claudinhoApiKey;
+  if (!hasClaudinhoKey) {
+    // Wipe any inherited provider env vars so the user isn't silently
+    // pre-logged-in with something they didn't choose.
+    delete process.env.ANTHROPIC_API_KEY;
+    delete process.env.ANTHROPIC_AUTH_TOKEN;
+    delete process.env.OPENAI_API_KEY;
+    delete process.env.OPENAI_BASE_URL;
+    delete process.env.GEMINI_API_KEY;
+    delete process.env.GOOGLE_API_KEY;
+    delete process.env.CLAUDE_CODE_USE_OPENAI;
+    delete process.env.CLAUDE_CODE_USE_GEMINI;
+    delete process.env.CLAUDE_CODE_USE_GITHUB;
+    delete process.env.CLAUDE_CODE_USE_BEDROCK;
+    delete process.env.CLAUDE_CODE_USE_VERTEX;
+    delete process.env.CLAUDE_CODE_USE_FOUNDRY;
+    delete process.env.CLAUDE_CODE_OAUTH_TOKEN;
+  }
+  if (!hasClaudinhoKey || !config.theme) {
     onboardingShown = true;
     const {
       Onboarding

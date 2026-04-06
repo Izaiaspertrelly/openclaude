@@ -70,14 +70,7 @@ const BORDER: RGB = [50, 90, 160]
 
 // ─── Block Text Logo ──────────────────────────────────────────────────────────
 
-const LOGO_PERTRELLY = [
-  `  ██████╗ ███████╗██████╗ ████████╗██████╗ ███████╗██╗     ██╗  ██╗   ██╗`,
-  `  ██╔══██╗██╔════╝██╔══██╗╚══██╔══╝██╔══██╗██╔════╝██║     ██║  ╚██╗ ██╔╝`,
-  `  ██████╔╝█████╗  ██████╔╝   ██║   ██████╔╝█████╗  ██║     ██║   ╚████╔╝ `,
-  `  ██╔═══╝ ██╔══╝  ██╔══██╗   ██║   ██╔══██╗██╔══╝  ██║     ██║    ╚██╔╝  `,
-  `  ██║     ███████╗██║  ██║   ██║   ██║  ██║███████╗███████╗███████╗██║   `,
-  `  ╚═╝     ╚══════╝╚═╝  ╚═╝   ╚═╝   ╚═╝  ╚═╝╚══════╝╚══════╝╚══════╝╚═╝   `,
-]
+const LOGO_PERTRELLY: string[] = []
 
 const LOGO_CLAUDINHO = [
   `  ██████╗██╗      █████╗ ██╗   ██╗██████╗ ██╗███╗   ██╗██╗  ██╗ ██████╗ `,
@@ -164,6 +157,18 @@ function boxRow(content: string, width: number, rawLen: number): string {
 export function printStartupScreen(): void {
   if (process.env.CI || !process.stdout.isTTY) return
 
+  // Claudinho: Skip the startup screen entirely on first run (when the
+  // user hasn't configured a provider yet). The onboarding flow will
+  // handle the welcome experience instead.
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { getGlobalConfig } = require('../utils/config.js') as typeof import('../utils/config.js')
+    const cfg = getGlobalConfig() as Record<string, unknown>
+    if (!cfg.claudinhoApiKey) return
+  } catch {
+    // If config isn't ready yet, fall through and print the screen anyway.
+  }
+
   const p = detectProvider()
   const W = 72
   const w = process.stdout.write.bind(process.stdout)
@@ -172,7 +177,7 @@ export function printStartupScreen(): void {
   w('\n')
 
   // ── Phase 1: Reveal logo lines with glow → fade animation ──
-  const allLogo = [...LOGO_PERTRELLY, '', ...LOGO_CLAUDINHO]
+  const allLogo = [...LOGO_CLAUDINHO]
   const total = allLogo.length
 
   for (let lineIdx = 0; lineIdx < total; lineIdx++) {
